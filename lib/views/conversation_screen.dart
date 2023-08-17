@@ -18,30 +18,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
   TextEditingController tecMessage = TextEditingController();
   Stream<QuerySnapshot>? chatMessagesStrm;
   final _controller = ScrollController();
-  Widget chatMessagesList() {
-    return StreamBuilder<QuerySnapshot>(
-        stream: chatMessagesStrm,
-        builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-          if (snapshot.hasError) {
-            return const Text('Something went wrong');
-          }
-
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Text("Loading");
-          }
-
-          return ListView(
-            controller: _controller,
-            children: snapshot.data!.docs.map((DocumentSnapshot document) {
-              Map<String, dynamic> data =
-                  document.data() as Map<String, dynamic>;
-              return MessageTile(
-                  msg: data['message'],
-                  isSendByMe: data['sendBy'] == UserData.myName);
-            }).toList(),
-          );
-        });
-  }
 
   sendMessage() async {
     if (tecMessage.text.isNotEmpty) {
@@ -51,6 +27,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
         "time": DateTime.now().microsecondsSinceEpoch,
       };
       databaseMethods.addConvMessages(widget.chatRoomId, msgMap).then((val) {
+        _controller.animateTo(
+          _controller.position.maxScrollExtent,
+          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 300),
+        );
         debugPrint(val.toString());
       });
     }
@@ -58,17 +39,73 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   @override
   void initState() {
-    chatMessagesStrm = databaseMethods.getConvMessages(widget.chatRoomId);
+    setState(() {
+      chatMessagesStrm = databaseMethods.getConvMessages(widget.chatRoomId);
+    });
+    debugPrint("This is ${_controller.hasClients}");
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      if (_controller.hasClients) {
+        final position = _controller.position.maxScrollExtent;
+        _controller.jumpTo(position);
+      }
+    });
+
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: appBarMain(context, []),
+      appBar: appBarMain(context, [
+        IconButton.outlined(
+          onPressed: () {
+            if (_controller.hasClients) {
+              _controller.animateTo(
+                _controller.position.maxScrollExtent,
+                curve: Curves.easeOut,
+                duration: const Duration(milliseconds: 300),
+              );
+            }
+          },
+          icon: const Icon(
+            Icons.downloading_rounded,
+            color: Colors.white,
+          ),
+        )
+      ]),
       body: Column(
         children: [
-          Expanded(child: chatMessagesList()),
+          Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                  stream: chatMessagesStrm,
+                  builder: (BuildContext context,
+                      AsyncSnapshot<QuerySnapshot> snapshot) {
+                    if (snapshot.hasError) {
+                      return const Text('Something went wrong');
+                    }
+
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Text("Loading");
+                    }
+                    if (_controller.hasClients) {
+                      _controller.animateTo(
+                        _controller.position.maxScrollExtent,
+                        curve: Curves.easeOut,
+                        duration: const Duration(milliseconds: 300),
+                      );
+                    }
+                    return ListView(
+                      controller: _controller,
+                      children:
+                          snapshot.data!.docs.map((DocumentSnapshot document) {
+                        Map<String, dynamic> data =
+                            document.data() as Map<String, dynamic>;
+                        return MessageTile(
+                            msg: data['message'],
+                            isSendByMe: data['sendBy'] == UserData.myName);
+                      }).toList(),
+                    );
+                  })),
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -94,11 +131,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           setState(() {
                             tecMessage.text = "";
                           });
-                          if (_controller.hasClients) {
-                            final position =
-                                _controller.position.maxScrollExtent;
-                            _controller.jumpTo(position);
-                          }
                         },
                         icon: const Icon(Icons.send),
                       )),

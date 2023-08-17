@@ -63,7 +63,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   getUserInfo() async {
     UserData.myName = await SprefHelper.getUsernameSpref();
-    chatRoomsStrm = databaseMethods.getChatRooms(UserData.myName);
+    setState(() {
+      chatRoomsStrm = databaseMethods.getChatRooms(UserData.myName);
+    });
     // databaseMethods.getChatRooms(UserData.myName).then((v) {
     //   setState(() {
     //     chatRoomsStrm = v;
